@@ -1,11 +1,11 @@
 #include <Wire.h>
 
-#define DHT_PIN 23
+#define DHT_PIN 4
 #define SOIL_PIN 32
 #define PUMP_PIN 2
 #define SDA_PIN 21
 #define SCL_PIN 22
-#define LDR_PIN 25
+#define LDR_PIN 34
 
 const int DRY_THRESHOLD = 300;
 const int WET_THRESHOLD = 700;
@@ -265,18 +265,8 @@ void setup() {
   Serial.begin(115200);
   pinMode(PUMP_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
-
-  delay(10);
   ssd1306_init();
-
   Wire.begin(SDA_PIN, SCL_PIN);
-  delay(50);
-
-  ssd1306_clear();
-  ssd1306_drawString(0, 0, "Hello ESP32");
-  ssd1306_drawString(0, 16, "LTP03A / JY");
-  ssd1306_drawString(0, 32, "No Lib Demo");
-  ssd1306_display();
 }
 
 void loop() {
@@ -298,27 +288,42 @@ void loop() {
     Serial.print(" *C, Do am: ");
     Serial.print(hum);
     Serial.println(" %");
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Nhiet do: %.2f *C", temp);
+    ssd1306_drawString(0, 0, buf);
+    snprintf(buf, sizeof(buf), "Do am:  %.2f %%", hum);
+    ssd1306_drawString(0, 10, buf);
   } else {
     Serial.println("Loi doc DHT22!");
+    ssd1306_drawString(0, 0, "DHT read error");
   }
   int ldrValue = analogRead(LDR_PIN);  // đọc giá trị ADC (0 - 4095)
-  
+  int lightPercent = map(ldrValue, 0, 4095, 0, 100);
   Serial.print("Gia tri LDR: ");
   Serial.println(ldrValue);
   int soil = analogRead(SOIL_PIN);
+  int soilPercent = 100 - map(soil, 0, 4095, 0, 100);
     Serial.print("Do am dat: ");
-    Serial.println(soil);
+    Serial.println(soilPercent);
+    Serial.println(" %");
 
     if (soil < DRY_THRESHOLD) {
       digitalWrite(PUMP_PIN, HIGH);
     } else if (soil > WET_THRESHOLD) {
       digitalWrite(PUMP_PIN, LOW);
     }
+  char buf2[32];
+  snprintf(buf2, sizeof(buf2), "Light: %d %%", lightPercent);
+  ssd1306_drawString(0, 20, buf2);
+  char buf3[32];
+  snprintf(buf3, sizeof(buf3), "Do am dat: %d %%", soilPercent);
+  ssd1306_drawString(0, 30, buf3);
   ssd1306_drawPixel(127, 63, true);
-  ssd1306_display();
-  delay(500);
-  ssd1306_drawPixel(127, 63, false);
-  ssd1306_display();
-  delay(500);
+ssd1306_display();
+delay(500);
+ssd1306_drawPixel(127, 63, false);
+ssd1306_display();
+delay(500);
+
   delay(2000);
 }
