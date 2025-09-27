@@ -1,5 +1,3 @@
-#include <Wire.h>
-
 #define DHT_PIN 4
 #define SOIL_PIN 32
 #define PUMP_PIN 2
@@ -130,66 +128,113 @@ const uint8_t font5x7[] = {
 };
 
 // --- SSD1306 low-level functions ---
-void ssd1306_command(uint8_t c) {
-  Wire.beginTransmission(SSD1306_ADDR);
-  Wire.write(0x00); // control byte: Co = 0, D/C# = 0 => next byte is command
-  Wire.write(c);
-  Wire.endTransmission();
+void i2c_delay() { delayMicroseconds(5); }
+
+void i2c_sda_high() { pinMode(SDA_PIN, INPUT_PULLUP); }
+void i2c_sda_low()  { pinMode(SDA_PIN, OUTPUT); digitalWrite(SDA_PIN, LOW); }
+void i2c_scl_high() { pinMode(SCL_PIN, INPUT_PULLUP); }
+void i2c_scl_low()  { pinMode(SCL_PIN, OUTPUT); digitalWrite(SCL_PIN, LOW); }
+
+void i2c_start() {
+  i2c_sda_high(); i2c_scl_high(); i2c_delay();
+  i2c_sda_low(); i2c_delay();
+  i2c_scl_low(); i2c_delay();
 }
 
+void i2c_stop() {
+  i2c_sda_low(); i2c_delay();
+  i2c_scl_high(); i2c_delay();
+  i2c_sda_high(); i2c_delay();
+}
+
+void i2c_writeBit(bool bit) {
+  if (bit) i2c_sda_high(); else i2c_sda_low();
+  i2c_delay();
+  i2c_scl_high(); i2c_delay();
+  i2c_scl_low(); i2c_delay();
+}
+
+bool i2c_writeByte(uint8_t byte) {
+  for (int i = 7; i >= 0; i--) {
+    i2c_writeBit((byte >> i) & 1);
+  }
+  // đọc ACK
+  i2c_sda_high();
+  i2c_delay();
+  i2c_scl_high();
+  bool ack = !digitalRead(SDA_PIN);
+  i2c_scl_low();
+  return ack;
+}
+
+//========================= SSD1306 commands =========================//
+
+void ssd1306_command(uint8_t c) {
+  i2c_start();
+  i2c_writeByte(SSD1306_ADDR << 1);
+  i2c_writeByte(0x00); // Co=0, D/C#=0 (command)
+  i2c_writeByte(c);
+  i2c_stop();
+}
+
+//========================= Khởi tạo màn hình =========================//
+
 void ssd1306_init() {
-  Wire.begin(SDA_PIN, SCL_PIN);
+  pinMode(SDA_PIN, OUTPUT);
+  pinMode(SCL_PIN, OUTPUT);
+  digitalWrite(SDA_PIN, HIGH);
+  digitalWrite(SCL_PIN, HIGH);
+
   delay(100);
-  ssd1306_command(0xAE); // display off
-  ssd1306_command(0x20); ssd1306_command(0x00); // addressing mode 0 = horizontal
-  ssd1306_command(0xB0); // set page start address
-  ssd1306_command(0xC8); // COM output scan direction
-  ssd1306_command(0x00); // low column addr
-  ssd1306_command(0x10); // high column addr
-  ssd1306_command(0x40); // start line = 0
-  ssd1306_command(0x81); ssd1306_command(0x7F); // contrast
-  ssd1306_command(0xA1); // segment remap
-  ssd1306_command(0xA6); // normal display
-  ssd1306_command(0xA8); ssd1306_command(0x3F); // multiplex 1/64
-  ssd1306_command(0xA4); // output RAM to display
-  ssd1306_command(0xD3); ssd1306_command(0x00); // display offset
-  ssd1306_command(0xD5); ssd1306_command(0x80); // display clock divide
-  ssd1306_command(0xD9); ssd1306_command(0xF1); // pre-charge
-  ssd1306_command(0xDA); ssd1306_command(0x12); // COM pins
-  ssd1306_command(0xDB); ssd1306_command(0x40); // VCOM detect
-  ssd1306_command(0x8D); ssd1306_command(0x14); // charge pump on
-  ssd1306_command(0xAF); // display ON
+  ssd1306_command(0xAE);
+  ssd1306_command(0x20); ssd1306_command(0x00);
+  ssd1306_command(0xB0);
+  ssd1306_command(0xC8);
+  ssd1306_command(0x00);
+  ssd1306_command(0x10);
+  ssd1306_command(0x40);
+  ssd1306_command(0x81); ssd1306_command(0x7F);
+  ssd1306_command(0xA1);
+  ssd1306_command(0xA6);
+  ssd1306_command(0xA8); ssd1306_command(0x3F);
+  ssd1306_command(0xA4);
+  ssd1306_command(0xD3); ssd1306_command(0x00);
+  ssd1306_command(0xD5); ssd1306_command(0x80);
+  ssd1306_command(0xD9); ssd1306_command(0xF1);
+  ssd1306_command(0xDA); ssd1306_command(0x12);
+  ssd1306_command(0xDB); ssd1306_command(0x40);
+  ssd1306_command(0x8D); ssd1306_command(0x14);
+  ssd1306_command(0xAF);
+
   ssd1306_clear();
   ssd1306_display();
 }
+
+//========================= Buffer & hiển thị =========================//
 
 void ssd1306_clear() {
   memset(ssd1306_buffer, 0, sizeof(ssd1306_buffer));
 }
 
 void ssd1306_display() {
-  // write buffer page by page
   for (uint8_t page = 0; page < PAGES; page++) {
-    ssd1306_command(0xB0 + page); // set page
-    ssd1306_command(0x00); // low col = 0
-    ssd1306_command(0x10); // high col = 0
-    Wire.beginTransmission(SSD1306_ADDR);
-    Wire.write(0x40); // control byte: Co = 0, D/C# = 1 => following are data bytes
-    // send 128 bytes of this page
+    ssd1306_command(0xB0 + page);
+    ssd1306_command(0x00);
+    ssd1306_command(0x10);
+
+    i2c_start();
+    i2c_writeByte(SSD1306_ADDR << 1);
+    i2c_writeByte(0x40); // data mode
+
     for (uint16_t col = 0; col < WIDTH; col++) {
-      Wire.write(ssd1306_buffer[page * WIDTH + col]);
-      // if Wire buffer limit, endTransmission() and begin again; on ESP32 this often okay
-      if ( (col & 0x1F) == 0x1F ) { // flush every 32 bytes to be safe
-        Wire.endTransmission();
-        Wire.beginTransmission(SSD1306_ADDR);
-        Wire.write(0x40);
-      }
+      i2c_writeByte(ssd1306_buffer[page * WIDTH + col]);
     }
-    Wire.endTransmission();
+    i2c_stop();
   }
 }
 
-// draw pixel in buffer
+//========================= Vẽ điểm ảnh =========================//
+
 void ssd1306_drawPixel(int16_t x, int16_t y, bool color) {
   if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
   uint16_t index = (y / 8) * WIDTH + x;
@@ -197,7 +242,6 @@ void ssd1306_drawPixel(int16_t x, int16_t y, bool color) {
   else ssd1306_buffer[index] &= ~(1 << (y & 7));
 }
 
-// draw char using 5x7 font
 void ssd1306_drawChar(int16_t x, int16_t y, char c) {
   if (c < 32 || c > 127) c = '?';
   const uint8_t* glyph = &font5x7[(c - 32) * 5];
@@ -210,11 +254,10 @@ void ssd1306_drawChar(int16_t x, int16_t y, char c) {
   }
 }
 
-// write string
 void ssd1306_drawString(int16_t x, int16_t y, const char* s) {
   while (*s) {
     ssd1306_drawChar(x, y, *s++);
-    x += 6; // 5px glyph +1 spacing
+    x += 6;
     if (x + 5 >= WIDTH) break;
   }
 }
@@ -266,7 +309,6 @@ void setup() {
   pinMode(PUMP_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
   ssd1306_init();
-  Wire.begin(SDA_PIN, SCL_PIN);
 }
 
 void loop() {
