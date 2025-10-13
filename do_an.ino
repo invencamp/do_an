@@ -7,8 +7,8 @@
 #define SDA_PIN 21
 #define SCL_PIN 22
 #define LDR_PIN 34
-#define PWMA 16
-#define PWMB 17
+#define PWMA 16 // bơm
+#define PWMB 17 // đèn
 
 #include "DHT.h"
 
@@ -35,10 +35,6 @@ DHT dht(DHTPIN, DHTTYPE);
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
-
-int mode = 1;
-int brightness = 0;
-int PumpVal = 0;
 
 uint8_t data[5]; // 5 byte dữ liệu: [Hh, Hl, Th, Tl, checksum]
 
@@ -309,7 +305,6 @@ void loop() {
   // Kiểm tra lỗi khi đọc dữ liệu
   if (isnan(hum) || isnan(temp) || isnan(f)) {
     Serial.println("❌ Lỗi đọc cảm biến DHT22!");
-    return;
   }
    Serial.print("Nhiệt độ: ");
   Serial.print(temp);
@@ -337,47 +332,51 @@ void loop() {
     Serial.println(soilPercent);
     Serial.println(" %");
   if (Firebase.RTDB.getInt(&fbdo, "/ESP32/OperationMode")) {
-      mode = fbdo.intData();
+      int mode = fbdo.intData();
     Serial.printf("OperationMode: %d\n", mode);
-  }
-  if(mode == 1){
-    if (soilPercent < 80) {
+    if(mode == 1){
+    //if (soilPercent < 80) {
       digitalWrite(PUMP_PIN, HIGH);
       int x = round(((100 - soilPercent) * 255) / 100.0);
       ledcWrite(0, x);   // PWM cho bơm
       Serial.print("Giá trị bơm:");
       Serial.print(x);
       Firebase.RTDB.setInt(&fbdo, "/ESP32/Actuator/PumpVal", 100 - soilPercent);
+      /*
     } else {
       digitalWrite(PUMP_PIN, LOW);
-    }
-    if (lightPercent < 60){
+    }*/
+    //if (lightPercent < 60){
       digitalWrite(LIGHT_PIN, HIGH);
       int y = round(((100 - lightPercent) * 255) / 100.0);
       ledcWrite(1, y);
       Serial.print("Giá trị đèn:");
       Serial.print(y);
       Firebase.RTDB.setInt(&fbdo, "/ESP32/Actuator/Brightness", 100 - lightPercent);
+      /*
     }
     else {
       digitalWrite(LIGHT_PIN, LOW);
-    }
+    }*/
   }
   else {
+    if (Firebase.RTDB.getInt(&fbdo, "/ESP32/Actuator/PumpVal")) {
+       int PumpVal = fbdo.intData();
+       int z = round((PumpVal * 255) / 100.0);
+       digitalWrite(PUMP_PIN, HIGH);
+      ledcWrite(0, z);   // PWM cho bơm
+    Serial.printf("PumpVal: %d\n", z);
+  }
     if (Firebase.RTDB.getInt(&fbdo, "/ESP32/Actuator/Brightness")) {
-       brightness = fbdo.intData();
-    Serial.printf("Brightness: %d\n", brightness);
+       int brightness = fbdo.intData();
+       int t = round((brightness * 255) / 100.0);
+       digitalWrite(LIGHT_PIN, HIGH);
+      ledcWrite(1, t);
+    Serial.printf("Brightness: %d\n", t);
   }
-  if (Firebase.RTDB.getInt(&fbdo, "/ESP32/Actuator/PumpVal")) {
-       PumpVal = fbdo.intData();
-    Serial.printf("PumpVal: %d\n", PumpVal);
-  }
-  digitalWrite(PUMP_PIN, HIGH);
-      // Khi cần thay đổi độ sáng:
-      ledcWrite(0, PumpVal);   // PWM cho bơm
-      digitalWrite(LIGHT_PIN, HIGH);
-      ledcWrite(1, brightness);
 }
+  }
+  
   char buf2[32];
   snprintf(buf2, sizeof(buf2), "Light: %d %%", lightPercent);
   ssd1306_drawString(0, 20, buf2);
