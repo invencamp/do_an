@@ -1,6 +1,6 @@
 #include <Wire.h>
 
-#define DHT_PIN 25
+
 #define SOIL_PIN 34
 #define PUMP_PIN 2
 #define LIGHT_PIN 15
@@ -10,6 +10,12 @@
 #define PWMA 16
 #define PWMB 17
 
+#include "DHT.h"
+
+#define DHTPIN 25          // Chân DATA của DHT22 nối với GPIO 4 của ESP32
+#define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
 #include <WiFi.h>
 #include <Firebase_ESP_Client.h>
 
@@ -18,8 +24,8 @@
 #include "addons/RTDBHelper.h"   // In ra thông tin RTDB
 
 // 🛜 WiFi
-#define WIFI_SSID "realme Q5"
-#define WIFI_PASSWORD "duy0109@"
+#define WIFI_SSID "VNUBookStore"
+#define WIFI_PASSWORD "Nxbdhqghn16"
 
 // 🔥 Firebase
 #define API_KEY "AIzaSyARpYop_hO0Z7Jf7N478kbT1niQ2eugevg"
@@ -30,16 +36,9 @@ FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-unsigned long sendDataPrevMillis = 0;
-int count = 0;
 int mode = 1;
 int brightness = 0;
 int PumpVal = 0;
-float hum = 0;
-float temp = 0;
-
-const int DRY_THRESHOLD = 300;
-const int WET_THRESHOLD = 700;
 
 uint8_t data[5]; // 5 byte dữ liệu: [Hh, Hl, Th, Tl, checksum]
 
@@ -283,7 +282,8 @@ bool readDHT22() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
+  dht.begin();
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(LIGHT_PIN, OUTPUT);
   ssd1306_init();
@@ -302,33 +302,31 @@ void setup() {
 }
 
 void loop() {
-  if (readDHT22()) {
-    // Ghép giá trị độ ẩm
-    int humidity = (data[0] << 8) | data[1];
-    int temperature = (data[2] << 8) | data[3];
+  float hum = dht.readHumidity();
+  float temp = dht.readTemperature();      // °C
+  float f = dht.readTemperature(true);  // °F
 
-    hum = humidity / 10.0;
-    temp = temperature / 10.0;
+  // Kiểm tra lỗi khi đọc dữ liệu
+  if (isnan(hum) || isnan(temp) || isnan(f)) {
+    Serial.println("❌ Lỗi đọc cảm biến DHT22!");
+    return;
+  }
+   Serial.print("Nhiệt độ: ");
+  Serial.print(temp);
+  Serial.print(" °C  |  Độ ẩm: ");
+  Serial.print(hum);
+  Serial.print(" %  ");
 
-    // Nếu bit dấu nhiệt độ (bit 15) là 1 thì là số âm
-    if (temperature & 0x8000) {
-      temp = -( (temperature & 0x7FFF) / 10.0 );
-    }
-
-    Serial.print("Nhiet do: ");
-    Serial.print(temp);
-    Serial.print(" *C, Do am: ");
-    Serial.print(hum);
-    Serial.println(" %");
     char buf[32];
     snprintf(buf, sizeof(buf), "Nhiet do: %.2f *C", temp);
     ssd1306_drawString(0, 0, buf);
     snprintf(buf, sizeof(buf), "Do am:  %.2f %%", hum);
     ssd1306_drawString(0, 10, buf);
-  } else {
-    Serial.println("Loi doc DHT22!");
-    ssd1306_drawString(0, 0, "DHT read error");
-  }
+
+    Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Temp", temp);     // Ghi vào Temp
+  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Humid", hum);    // Ghi vào Humid
+
+
   int ldrValue = analogRead(LDR_PIN);  // đọc giá trị ADC (0 - 4095)
   int lightPercent = map(ldrValue, 0, 4095, 0, 100);
   Serial.print("Gia tri LDR: ");
@@ -338,7 +336,6 @@ void loop() {
     Serial.print("Do am dat: ");
     Serial.println(soilPercent);
     Serial.println(" %");
-
   if (Firebase.RTDB.getInt(&fbdo, "/ESP32/OperationMode")) {
       mode = fbdo.intData();
     Serial.printf("OperationMode: %d\n", mode);
@@ -387,6 +384,7 @@ void loop() {
   char buf3[32];
   snprintf(buf3, sizeof(buf3), "Do am dat: %d %%", soilPercent);
   ssd1306_drawString(0, 30, buf3);
+
   ssd1306_drawPixel(127, 63, true);
 ssd1306_display();
 delay(500);
@@ -395,8 +393,6 @@ ssd1306_display();
 delay(500);
 
 // 📤 Gửi dữ liệu cảm biến
-  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Temp", temp);     // Ghi vào Temp
-  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Humid", hum);    // Ghi vào Humid
   Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Illum", lightPercent);    // Ghi vào Illum
   Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Pres", soilPercent);
 
