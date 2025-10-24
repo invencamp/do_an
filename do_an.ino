@@ -1,36 +1,22 @@
 #include <Wire.h>
-<<<<<<< HEAD
 #include <WiFi.h>
 #include <Firebase_ESP_Client.h>
 #include "addons/TokenHelper.h"  // In ra thông tin token
 #include "addons/RTDBHelper.h"   // In ra thông tin RTDB
 #include "DHT.h"
-=======
-
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
 
 #define SOIL_PIN 34
 #define PUMP_PIN 2
 #define LIGHT_PIN 15
 #define SDA_PIN 21
 #define SCL_PIN 22
-<<<<<<< HEAD
 #define LDR_PIN 35
 #define PWMA 16 // bơm
 #define PWMB 17 // đèn
-=======
-#define LDR_PIN 34
-#define PWMA 16 // bơm
-#define PWMB 17 // đèn
-
-#include "DHT.h"
-
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
 #define DHTPIN 25          // Chân DATA của DHT22 nối với GPIO 4 của ESP32
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
 
-<<<<<<< HEAD
 // 🛜 WiFi
 #define WIFI_SSID "realme Q5"
 #define WIFI_PASSWORD "duy0109@"
@@ -67,18 +53,6 @@ void WiFiEventHandler(WiFiEvent_t event) {
   }
 }
 */
-=======
-#include <WiFi.h>
-#include <Firebase_ESP_Client.h>
-
-// Thư viện cần thiết
-#include "addons/TokenHelper.h"  // In ra thông tin token
-#include "addons/RTDBHelper.h"   // In ra thông tin RTDB
-
-// 🛜 WiFi
-#define WIFI_SSID "VNUBookStore"
-#define WIFI_PASSWORD "Nxbdhqghn16"
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
 
 // 🔥 Firebase
 #define API_KEY "AIzaSyARpYop_hO0Z7Jf7N478kbT1niQ2eugevg"
@@ -101,13 +75,6 @@ uint8_t data[5]; // 5 byte dữ liệu: [Hh, Hl, Th, Tl, checksum]
 
 uint8_t ssd1306_buffer[WIDTH * PAGES];
 
-<<<<<<< HEAD
-=======
-// Pins sensors
-#define DHT_PIN 4        // DHT22 data pin
-#define LDR_PIN 34       // ADC1_CH6 on many ESP32 boards
-
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
 // --- font 5x7 (ASCII 32..127), each char 5 bytes ---
 const uint8_t font5x7[] = {
   // font data for 96 chars (32..127) -> 96*5 = 480 bytes
@@ -290,55 +257,14 @@ void ssd1306_drawString(int16_t x, int16_t y, const char* s) {
   if (x + 5 >= WIDTH) break; 
   } 
 }
-<<<<<<< HEAD
+
 unsigned long lastCheck = 0;
 char bu[32];
 char buf[32];
-=======
+int mode = 1;
+int PumpVal = 0;
+int brightness = 0;
 
-bool readDHT22() {
-  uint8_t bits[40];
-  uint8_t byteIndex = 0, bitIndex = 7;
-
-  // Reset buffer
-  for (int i = 0; i < 5; i++) data[i] = 0;
-
-  // Gửi tín hiệu Start: kéo thấp ít nhất 1ms
-  pinMode(DHT_PIN, OUTPUT);
-  digitalWrite(DHT_PIN, LOW);
-  delay(2);  // 2ms
-  digitalWrite(DHT_PIN, HIGH);
-  delayMicroseconds(30);
-  pinMode(DHT_PIN, INPUT);
-
-  // Đợi phản hồi từ DHT (LOW ~80us, HIGH ~80us)
-  unsigned long start = micros();
-  while (digitalRead(DHT_PIN) == HIGH) { if (micros()-start>100) return false; }
-  start = micros();
-  while (digitalRead(DHT_PIN) == LOW) { if (micros()-start>100) return false; }
-  start = micros();
-  while (digitalRead(DHT_PIN) == HIGH) { if (micros()-start>100) return false; }
-
-  // Đọc 40 bit dữ liệu
-  for (int i = 0; i < 40; i++) {
-    // mỗi bit bắt đầu bằng xung LOW 50us
-    while (digitalRead(DHT_PIN) == LOW);
-    unsigned long t = micros();
-    while (digitalRead(DHT_PIN) == HIGH);
-    if ((micros() - t) > 40) {
-      data[byteIndex] |= (1 << bitIndex);  // nếu HIGH lâu hơn 40us thì là 1
-    }
-    if (bitIndex == 0) { bitIndex = 7; byteIndex++; }
-    else bitIndex--;
-  }
-
-  // Kiểm tra checksum
-  if ((uint8_t)(data[0] + data[1] + data[2] + data[3]) != data[4]) return false;
-
-  return true;
-}
-
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
 void setup() {
   Serial.begin(9600);
   dht.begin();
@@ -346,21 +272,11 @@ void setup() {
   pinMode(LIGHT_PIN, OUTPUT);
   ssd1306_init();
   // ✅ Kết nối WiFi
-<<<<<<< HEAD
   // Gắn sự kiện WiFi
   //WiFi.onEvent(WiFiEventHandler);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   //while (WiFi.status() != WL_CONNECTED) {}
 
-=======
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {}
-
-  config.database_url = "https://esp32-d4aae-default-rtdb.firebaseio.com/";
-  config.signer.tokens.legacy_token = "jefxIAsgn9YvCc9RASqdfeCgPnbz8SFlHstXAAb8";
-
-  Firebase.begin(&config, &auth);
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
   ledcAttachPin(PWMA, 0); // Channel 0
       ledcSetup(0, 5000, 8);  // Tần số 5kHz, độ phân giải 8 bit (0-255)
             ledcAttachPin(PWMB, 1);
@@ -368,7 +284,6 @@ void setup() {
 }
 
 void loop() {
-<<<<<<< HEAD
   if((WiFi.status() == WL_CONNECTED) && (wifiConnected == false)){
     wifiConnected == true;
     config.database_url = "https://esp32-d4aae-default-rtdb.firebaseio.com/";
@@ -380,8 +295,6 @@ void loop() {
     wifiConnected == false;
   }
   if (millis() - lastCheck > 2000) {
-=======
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
   float hum = dht.readHumidity();
   float temp = dht.readTemperature();      // °C
   float f = dht.readTemperature(true);  // °F
@@ -395,7 +308,6 @@ void loop() {
   Serial.print(" °C  |  Độ ẩm: ");
   Serial.print(hum);
   Serial.print(" %  ");
-<<<<<<< HEAD
   snprintf(bu, sizeof(bu), "Nhiet do: %.2f *C", temp);
   snprintf(buf, sizeof(buf), "Do am:  %.2f %%", hum);
   Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Temp", temp);     // Ghi vào Temp
@@ -406,19 +318,6 @@ void loop() {
     ssd1306_drawString(0, 0, bu);
     ssd1306_drawString(0, 10, buf);
 
-=======
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Nhiet do: %.2f *C", temp);
-    ssd1306_drawString(0, 0, buf);
-    snprintf(buf, sizeof(buf), "Do am:  %.2f %%", hum);
-    ssd1306_drawString(0, 10, buf);
-
-    Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Temp", temp);     // Ghi vào Temp
-  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Humid", hum);    // Ghi vào Humid
-
-
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
   int ldrValue = analogRead(LDR_PIN);  // đọc giá trị ADC (0 - 4095)
   int lightPercent = map(ldrValue, 0, 4095, 0, 100);
   Serial.print("Gia tri LDR: ");
@@ -429,7 +328,8 @@ void loop() {
     Serial.println(soilPercent);
     Serial.println(" %");
   if (Firebase.RTDB.getInt(&fbdo, "/ESP32/OperationMode")) {
-      int mode = fbdo.intData();
+      mode = fbdo.intData();
+  }
     Serial.printf("OperationMode: %d\n", mode);
     if(mode == 1){
     //if (soilPercent < 80) {
@@ -458,21 +358,22 @@ void loop() {
   }
   else {
     if (Firebase.RTDB.getInt(&fbdo, "/ESP32/Actuator/PumpVal")) {
-       int PumpVal = fbdo.intData();
+       PumpVal = fbdo.intData();
+    }
        int z = round((PumpVal * 255) / 100.0);
        digitalWrite(PUMP_PIN, HIGH);
       ledcWrite(0, z);   // PWM cho bơm
     Serial.printf("PumpVal: %d\n", z);
-  }
     if (Firebase.RTDB.getInt(&fbdo, "/ESP32/Actuator/Brightness")) {
-       int brightness = fbdo.intData();
+       brightness = fbdo.intData();
+    }
        int t = round((brightness * 255) / 100.0);
        digitalWrite(LIGHT_PIN, HIGH);
       ledcWrite(1, t);
     Serial.printf("Brightness: %d\n", t);
-  }
+  
 }
-  }
+  
   
   char buf2[32];
   snprintf(buf2, sizeof(buf2), "Light: %d %%", lightPercent);
@@ -488,19 +389,8 @@ ssd1306_drawPixel(127, 63, false);
 ssd1306_display();
 delay(500);
 
-<<<<<<< HEAD
-
-
    // 📤 Gửi dữ liệu cảm biến
   Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Illum", lightPercent);    // Ghi vào Illum
   Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Pres", soilPercent); 
   
 }
-=======
-// 📤 Gửi dữ liệu cảm biến
-  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Illum", lightPercent);    // Ghi vào Illum
-  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Pres", soilPercent);
-
-  delay(2000);
-}
->>>>>>> 2674bcbb41e7fcdfd7509da91527e08ba0e0e814
