@@ -8,11 +8,12 @@
 #define SOIL_PIN 34
 #define PUMP_PIN 2
 #define LIGHT_PIN 15
+#define LDR_PIN 35
 #define SDA_PIN 21
 #define SCL_PIN 22
-#define LDR_PIN 35
-#define PWMA 16 // bơm
+#define PWMA 5 // bơm
 #define PWMB 17 // đèn
+#define RELAY 13
 #define DHTPIN 25          // Chân DATA của DHT22 nối với GPIO 4 của ESP32
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
@@ -23,36 +24,6 @@ DHT dht(DHTPIN, DHTTYPE);
 
 // Trạng thái kết nối
 bool wifiConnected = false;
-
-/*
-// 🧠 Hàm callback khi có sự kiện WiFi
-void WiFiEventHandler(WiFiEvent_t event) {
-  switch (event) {
-    case ARDUINO_EVENT_WIFI_STA_START:
-      Serial.println("WiFi bắt đầu kết nối...");
-      break;
-
-    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-      Serial.println("Đã kết nối tới WiFi!");
-      break;
-
-    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-      Serial.print("Đã nhận IP: ");
-      Serial.println(WiFi.localIP());
-      wifiConnected = true;
-      break;
-
-    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-      Serial.println("Mất kết nối WiFi, đang thử kết nối lại...");
-      wifiConnected = false;
-      WiFi.reconnect();
-      break;
-
-    default:
-      break;
-  }
-}
-*/
 
 // 🔥 Firebase
 #define API_KEY "AIzaSyARpYop_hO0Z7Jf7N478kbT1niQ2eugevg"
@@ -266,17 +237,13 @@ int PumpVal = 0;
 int brightness = 0;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   dht.begin();
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(LIGHT_PIN, OUTPUT);
+  pinMode(RELAY, OUTPUT);
   ssd1306_init();
-  // ✅ Kết nối WiFi
-  // Gắn sự kiện WiFi
-  //WiFi.onEvent(WiFiEventHandler);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  //while (WiFi.status() != WL_CONNECTED) {}
-
   ledcAttachPin(PWMA, 0); // Channel 0
       ledcSetup(0, 5000, 8);  // Tần số 5kHz, độ phân giải 8 bit (0-255)
             ledcAttachPin(PWMB, 1);
@@ -294,20 +261,11 @@ void loop() {
   else{
     wifiConnected == false;
   }
-  if (millis() - lastCheck > 2000) {
+  if (millis() - lastCheck >= 2000) {
   float hum = dht.readHumidity();
   float temp = dht.readTemperature();      // °C
   float f = dht.readTemperature(true);  // °F
 
-  // Kiểm tra lỗi khi đọc dữ liệu
-  if (isnan(hum) || isnan(temp) || isnan(f)) {
-    Serial.println("❌ Lỗi đọc cảm biến DHT22!");
-  }
-   Serial.print("Nhiệt độ: ");
-  Serial.print(temp);
-  Serial.print(" °C  |  Độ ẩm: ");
-  Serial.print(hum);
-  Serial.print(" %  ");
   snprintf(bu, sizeof(bu), "Nhiet do: %.2f *C", temp);
   snprintf(buf, sizeof(buf), "Do am:  %.2f %%", hum);
   Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Temp", temp);     // Ghi vào Temp
@@ -318,43 +276,29 @@ void loop() {
     ssd1306_drawString(0, 0, bu);
     ssd1306_drawString(0, 10, buf);
 
-  int ldrValue = analogRead(LDR_PIN);  // đọc giá trị ADC (0 - 4095)
-  int lightPercent = map(ldrValue, 0, 4095, 0, 100);
-  Serial.print("Gia tri LDR: ");
-  Serial.println(ldrValue);
+  int lightValue = analogRead(LDR_PIN);
+  int lightPercent = map(lightValue, 0, 4095, 0, 100);
+
+    Serial.print("LDR (avg): ");
+    Serial.print(lightValue);
+    Serial.println("   |   ");
+
   int soil = analogRead(SOIL_PIN);
   int soilPercent = 100 - map(soil, 0, 4095, 0, 100);
-    Serial.print("Do am dat: ");
-    Serial.println(soilPercent);
-    Serial.println(" %");
+  Serial.println(soil);
+
   if (Firebase.RTDB.getInt(&fbdo, "/ESP32/OperationMode")) {
       mode = fbdo.intData();
   }
-    Serial.printf("OperationMode: %d\n", mode);
     if(mode == 1){
-    //if (soilPercent < 80) {
       digitalWrite(PUMP_PIN, HIGH);
       int x = round(((100 - soilPercent) * 255) / 100.0);
       ledcWrite(0, x);   // PWM cho bơm
-      Serial.print("Giá trị bơm:");
-      Serial.print(x);
       Firebase.RTDB.setInt(&fbdo, "/ESP32/Actuator/PumpVal", 100 - soilPercent);
-      /*
-    } else {
-      digitalWrite(PUMP_PIN, LOW);
-    }*/
-    //if (lightPercent < 60){
       digitalWrite(LIGHT_PIN, HIGH);
-      int y = round(((100 - lightPercent) * 255) / 100.0);
+      int y = round(lightPercent * 255 / 100.0);
       ledcWrite(1, y);
-      Serial.print("Giá trị đèn:");
-      Serial.print(y);
-      Firebase.RTDB.setInt(&fbdo, "/ESP32/Actuator/Brightness", 100 - lightPercent);
-      /*
-    }
-    else {
-      digitalWrite(LIGHT_PIN, LOW);
-    }*/
+      Firebase.RTDB.setInt(&fbdo, "/ESP32/Actuator/Brightness", lightPercent);
   }
   else {
     if (Firebase.RTDB.getInt(&fbdo, "/ESP32/Actuator/PumpVal")) {
@@ -363,34 +307,29 @@ void loop() {
        int z = round((PumpVal * 255) / 100.0);
        digitalWrite(PUMP_PIN, HIGH);
       ledcWrite(0, z);   // PWM cho bơm
-    Serial.printf("PumpVal: %d\n", z);
     if (Firebase.RTDB.getInt(&fbdo, "/ESP32/Actuator/Brightness")) {
        brightness = fbdo.intData();
     }
        int t = round((brightness * 255) / 100.0);
        digitalWrite(LIGHT_PIN, HIGH);
-      ledcWrite(1, t);
-    Serial.printf("Brightness: %d\n", t);
-  
+      ledcWrite(1, t);  
 }
   
   
   char buf2[32];
-  snprintf(buf2, sizeof(buf2), "Light: %d %%", lightPercent);
+  snprintf(buf2, sizeof(buf2), "Light: %d %%",100 - lightPercent);
   ssd1306_drawString(0, 20, buf2);
   char buf3[32];
   snprintf(buf3, sizeof(buf3), "Do am dat: %d %%", soilPercent);
   ssd1306_drawString(0, 30, buf3);
 
-  ssd1306_drawPixel(127, 63, true);
 ssd1306_display();
-delay(500);
-ssd1306_drawPixel(127, 63, false);
-ssd1306_display();
-delay(500);
 
    // 📤 Gửi dữ liệu cảm biến
-  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Illum", lightPercent);    // Ghi vào Illum
+  Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Illum",100 - lightPercent);    // Ghi vào Illum
   Firebase.RTDB.setInt(&fbdo, "/ESP32/Sensor/Pres", soilPercent); 
+
+digitalWrite(RELAY, HIGH);
+
   
 }
